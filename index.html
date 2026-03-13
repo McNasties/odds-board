@@ -970,14 +970,13 @@ function renderH2H(game, books) {
   if (!books.length) return noOdds();
   const best = {};
   books.forEach(bm => {
-    const m = bm.markets.find(m => m.key === 'h2h');
-    if (!m) return;
-    m.outcomes.forEach(o => {
+    const mkt = bm.markets.find(mk => mk.key === 'h2h');
+    if (!mkt) return;
+    mkt.outcomes.forEach(o => {
       if (!best[o.name] || o.price > best[o.name].price) best[o.name] = { price: o.price, book: bm.title };
     });
   });
   const names = Object.keys(best);
-  const cols = names.length;
 
   const bestChips = names.map(n => `
     <div class="best-chip">
@@ -989,9 +988,10 @@ function renderH2H(game, books) {
   const abbr = n => { const w = n.split(' '); const l = w[w.length-1]; return l.length > 8 ? l.slice(0,7)+'…' : l; };
   const headerCols = names.map(n => `<span>${abbr(n)}</span>`).join('');
   const rows = books.map(bm => {
-    if (!m) return '';
+    const mkt = bm.markets.find(mk => mk.key === 'h2h');
+    if (!mkt) return '';
     const cols = names.map(n => {
-      const o = m.outcomes.find(x => x.name === n);
+      const o = mkt.outcomes.find(x => x.name === n);
       const isBest = o && best[n]?.price === o.price;
       return `<span class="odd-val ${isBest ? 'best' : oddsClass(o?.price)}">${fmtOdds(o?.price)}</span>`;
     }).join('');
@@ -1013,16 +1013,16 @@ function renderSpreads(game, books) {
   if (!books.length) return noOdds();
   let names = [];
   for (const bm of books) {
-    const m = bm.markets.find(m => m.key === 'spreads');
-    if (m?.outcomes?.length) { names = m.outcomes.map(o => o.name); break; }
+    const mkt = bm.markets.find(mk => mk.key === 'spreads');
+    if (mkt?.outcomes?.length) { names = mkt.outcomes.map(o => o.name); break; }
   }
   if (!names.length) return noOdds();
 
   const rows = books.map(bm => {
-    const m = bm.markets.find(m => m.key === 'spreads');
-    if (!m) return '';
+    const mkt = bm.markets.find(mk => mk.key === 'spreads');
+    if (!mkt) return '';
     const cols = names.map(n => {
-      const o = m.outcomes.find(x => x.name === n);
+      const o = mkt.outcomes.find(x => x.name === n);
       return `<span class="odd-val neg"><span class="odd-val gold">${o ? (o.point>0?'+':'')+o.point : '—'}</span> <span style="font-size:11px;color:var(--txt-3)">${o ? `(${fmtOdds(o.price)})` : ''}</span></span>`;
     }).join('');
     return `<div class="book-row"><div class="book-row-inner" style="grid-template-columns:1fr ${names.map(()=>'72px').join(' ')}"><span>${bm.title}</span>${cols}</div></div>`;
@@ -1042,10 +1042,10 @@ function renderSpreads(game, books) {
 function renderTotals(game, books) {
   if (!books.length) return noOdds();
   const rows = books.map(bm => {
-    const m = bm.markets.find(m => m.key === 'totals');
-    if (!m) return '';
-    const ov = m.outcomes.find(o => o.name === 'Over');
-    const un = m.outcomes.find(o => o.name === 'Under');
+    const mkt = bm.markets.find(mk => mk.key === 'totals');
+    if (!mkt) return '';
+    const ov = mkt.outcomes.find(o => o.name === 'Over');
+    const un = mkt.outcomes.find(o => o.name === 'Under');
     return `<div class="book-row"><div class="book-row-inner" style="grid-template-columns:1fr 72px 72px">
       <span>${bm.title}</span>
       <span class="odd-val pos">O${ov?.point??'—'} <span style="font-size:11px;color:var(--txt-3)">${ov?`(${fmtOdds(ov.price)})`:''}</span></span>
