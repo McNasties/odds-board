@@ -222,6 +222,69 @@ body {
   font-weight: 500;
 }
 
+/* SEARCH BAR */
+.search-bar {
+  flex-shrink: 0;
+  padding: 8px 16px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.search-wrap {
+  position: relative;
+  flex: 1;
+}
+
+.search-icon {
+  position: absolute;
+  left: 11px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 13px;
+  color: var(--txt-3);
+  pointer-events: none;
+}
+
+.search-input {
+  width: 100%;
+  background: var(--bg-3);
+  border: 1px solid var(--border-md);
+  border-radius: 8px;
+  color: var(--txt);
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 9px 32px 9px 32px;
+  outline: none;
+  -webkit-appearance: none;
+  transition: border-color 0.15s;
+}
+.search-input::placeholder { color: var(--txt-3); }
+.search-input:focus { border-color: var(--blue); }
+
+.search-clear {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: var(--bg-4);
+  border: none;
+  border-radius: 50%;
+  width: 18px; height: 18px;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--txt-3);
+  font-size: 11px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s;
+}
+.search-clear.visible { opacity: 1; pointer-events: all; }
+
 /* FEED */
 .feed {
   flex: 1;
@@ -433,9 +496,24 @@ body {
   letter-spacing: 0.5px;
   color: var(--txt-3);
   text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
 }
 .book-table-head span:first-child,
-.book-row-inner span:first-child { text-align: left; color: var(--txt-2); font-size: 12px; font-weight: 600; letter-spacing: 0; text-transform: none; }
+.book-row-inner span:first-child {
+  text-align: left;
+  color: var(--txt-2);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
 
 .book-row {
   border-bottom: 1px solid var(--border);
@@ -622,6 +700,15 @@ body {
     </div>
   </nav>
 
+  <!-- SEARCH BAR -->
+  <div class="search-bar">
+    <div class="search-wrap">
+      <span class="search-icon">🔍</span>
+      <input class="search-input" id="searchInput" type="search" placeholder="Search teams or games…" oninput="onSearch()" autocomplete="off" autocorrect="off" spellcheck="false">
+      <button class="search-clear" id="searchClear" onclick="clearSearch()">✕</button>
+    </div>
+  </div>
+
   <main class="feed" id="feed"></main>
 
 </div>
@@ -657,6 +744,15 @@ let allSports = [];
 let fmt       = 'american';
 let bookLimit = 5;
 let qLeft = null, qUsed = null;
+let currentGames = [];
+let searchQuery  = '';
+
+// American sports shown first, in preferred order
+const US_PRIORITY = [
+  'americanfootball_nfl','basketball_nba','baseball_mlb','icehockey_nhl',
+  'americanfootball_ncaaf','basketball_ncaab','soccer_usa_mls',
+  'americanfootball_cfl','basketball_wnba',
+];
 
 const EMOJIS = {
   americanfootball:'🏈',basketball:'🏀',baseball:'⚾',icehockey:'🏒',
@@ -722,7 +818,18 @@ function buildGroupTabs() {
 }
 
 function buildPills(g) {
-  const list = g === 'all' ? allSports : allSports.filter(s => grp(s.key) === g);
+  let list = g === 'all' ? allSports : allSports.filter(s => grp(s.key) === g);
+
+  // Sort: US priority first, then alphabetical
+  list = [...list].sort((a, b) => {
+    const ai = US_PRIORITY.indexOf(a.key);
+    const bi = US_PRIORITY.indexOf(b.key);
+    if (ai !== -1 && bi !== -1) return ai - bi;
+    if (ai !== -1) return -1;
+    if (bi !== -1) return 1;
+    return a.title.localeCompare(b.title);
+  });
+
   document.getElementById('sportPills').innerHTML =
     `<button class="sport-pill ${sport==='upcoming'?'active':''}" data-sport="upcoming" onclick="selectSport(this,'upcoming')">🔥 Upcoming</button>` +
     list.map(s => `<button class="sport-pill ${sport===s.key?'active':''}" data-sport="${s.key}" onclick="selectSport(this,'${s.key}')">${emo(s.key)} ${s.title}</button>`).join('');
@@ -750,6 +857,32 @@ async function fetchOdds() {
     if (!r.ok) { const e = await r.json(); showError(e.error||`Error ${r.status}`); return; }
     render(await r.json(), market);
   } catch(e) { showError(e.message); }
+}
+
+// Search
+function onSearch() {
+  searchQuery = document.getElementById('searchInput').value.trim().toLowerCase();
+  const clearBtn = document.getElementById('searchClear');
+  clearBtn.classList.toggle('visible', searchQuery.length > 0);
+  renderFiltered();
+}
+
+function clearSearch() {
+  document.getElementById('searchInput').value = '';
+  searchQuery = '';
+  document.getElementById('searchClear').classList.remove('visible');
+  renderFiltered();
+}
+
+function renderFiltered() {
+  const market = document.getElementById('marketSelect').value;
+  if (!searchQuery) { render(currentGames, market); return; }
+  const filtered = currentGames.filter(g =>
+    g.home_team.toLowerCase().includes(searchQuery) ||
+    g.away_team.toLowerCase().includes(searchQuery) ||
+    g.sport_title?.toLowerCase().includes(searchQuery)
+  );
+  render(filtered, market, true);
 }
 
 // Format
@@ -790,10 +923,13 @@ function showError(msg) {
     </div>`;
 }
 
-function render(games, market) {
+function render(games, market, isSearch = false) {
+  if (!isSearch) currentGames = games || [];
   const feed = document.getElementById('feed');
   if (!games?.length) {
-    feed.innerHTML = `<div class="empty-state"><div class="empty-icon">📭</div><div class="empty-title">No games found</div><div class="empty-sub">No events available for this sport or market.</div></div>`;
+    feed.innerHTML = isSearch
+      ? `<div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-title">No results</div><div class="empty-sub">No games match "${searchQuery}"</div></div>`
+      : `<div class="empty-state"><div class="empty-icon">📭</div><div class="empty-title">No games found</div><div class="empty-sub">No events available for this sport or market.</div></div>`;
     return;
   }
   const quotaHtml = qLeft ? `<div class="quota-badge"><strong>${qLeft}</strong> left</div>` : '';
@@ -850,9 +986,9 @@ function renderH2H(game, books) {
       <div class="best-chip-book">${best[n].book}</div>
     </div>`).join('');
 
-  const headerCols = names.map(n => `<span>${n.split(' ').pop()}</span>`).join('');
+  const abbr = n => { const w = n.split(' '); const l = w[w.length-1]; return l.length > 8 ? l.slice(0,7)+'…' : l; };
+  const headerCols = names.map(n => `<span>${abbr(n)}</span>`).join('');
   const rows = books.map(bm => {
-    const m = bm.markets.find(m => m.key === 'h2h');
     if (!m) return '';
     const cols = names.map(n => {
       const o = m.outcomes.find(x => x.name === n);
@@ -892,7 +1028,8 @@ function renderSpreads(game, books) {
     return `<div class="book-row"><div class="book-row-inner" style="grid-template-columns:1fr ${names.map(()=>'72px').join(' ')}"><span>${bm.title}</span>${cols}</div></div>`;
   }).filter(Boolean).join('');
 
-  const headerCols = names.map(n => `<span>${n.split(' ').pop()}</span>`).join('');
+  const abbrS = n => { const w = n.split(' '); const l = w[w.length-1]; return l.length > 8 ? l.slice(0,7)+'…' : l; };
+  const headerCols = names.map(n => `<span>${abbrS(n)}</span>`).join('');
   return `<div class="odds-section">
     <div class="odds-section-label">Spreads</div>
     <div class="book-table">
